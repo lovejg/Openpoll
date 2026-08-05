@@ -248,6 +248,8 @@ AdSense 신청이 거절되면서 수익화 경로가 흐려졌고, 매월 AWS *
 | AWS RDS PostgreSQL       | 메인 DB                             |
 | AWS ALB                  | 80/443 수신 + EC2 포워딩 (TLS)      |
 | AWS Route 53             | DNS                                 |
+| AWS NAT Gateway          | private subnet 아웃바운드 트래픽    |
+| AWS ElastiCache (Redis)  | 초기 캐시/큐 (→ 로컬 Redis6 로 전환) |
 | AWS SSM Parameter Store  | 환경변수 / Secret 관리              |
 | AWS SSM Session Manager  | private subnet EC2 접속             |
 | GitHub Actions           | CI/CD 파이프라인                    |
@@ -262,6 +264,36 @@ React 19 + TypeScript 5.9 · Vite (rolldown-vite) · Tailwind CSS 4.1 · React R
 ---
 
 ## 아키텍처
+
+### AWS 인프라 구성도
+
+> AWS 배포 및 CI/CD 파이프라인 구축 시 직접 설계한 아키텍처입니다. _(설계·구축: 박찬영)_
+
+<p align="center">
+  <img src="docs/architecture/aws-architecture.png" alt="OpenPoll AWS 아키텍처 다이어그램" width="720" />
+</p>
+
+| 구간              | 구성                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| **DNS**           | Route 53 — `openpoll.co.kr` / `www`                                                  |
+| **Public subnet** | ALB (80→443 리다이렉트, TLS 종료) · NAT Gateway (private subnet 아웃바운드)          |
+| **Private subnet**| EC2 (Frontend — nginx + SPA) · EC2 (Backend — Node/Express + PM2)                    |
+| **데이터**        | RDS PostgreSQL (메인 DB) · ElastiCache Redis (이후 로컬 Redis6 AOF 로 전환, 비용 절감) |
+| **CI/CD**         | GitHub Actions → AWS OIDC → SSM Send Command → private subnet EC2 배포 (키 없는 배포) |
+
+**요청 흐름**
+
+사용자 요청은 `Route 53` 에서 도메인을 해석한 뒤 **public subnet 의 ALB** 로 들어옵니다. ALB 가 80 요청을 443 으로 리다이렉트하고 TLS 를 종료한 다음, 경로에 따라 **private subnet 의 EC2(Frontend)** 또는 **EC2(Backend)** 로 포워딩합니다. Frontend EC2 는 nginx 로 SPA 정적 파일을 서빙하고, API 호출은 Backend EC2 의 Express 로 향합니다. Backend 는 같은 private subnet 의 **RDS(PostgreSQL)** 와 **ElastiCache(Redis)** 에 접근합니다.
+
+**private subnet 설계 의도**
+
+EC2·RDS·Redis 를 전부 private subnet 에 격납해 **인터넷에서 직접 도달할 수 있는 인바운드 경로를 ALB 하나로 좁혔습니다.** 인바운드 SSH 포트는 어디에도 열려 있지 않고, 배포·운영 명령은 전부 **AWS SSM Session Manager / Send Command** 로 수행합니다. 대신 `npm install` 같은 아웃바운드 트래픽이 필요하므로 public subnet 에 **NAT Gateway** 를 두고 private subnet 의 외부 통신을 그쪽으로 흘려보냅니다.
+
+**CI/CD 흐름**
+
+`main` push → GitHub Actions 가 **GitHub OIDC 로 IAM Role 을 assume**(장기 액세스 키를 CI 에 저장하지 않음) → **SSM Send Command** 로 EC2 의 배포 스크립트를 실행합니다. SSM 을 경유하기 때문에 CI 러너가 private subnet 안으로 들어올 필요 없이, EC2 를 계속 닫아 둔 채로 배포할 수 있습니다.
+
+> 그림의 아래쪽 빈 subnet 은 **다중 AZ 확장을 전제로 잡아 둔 자리**입니다. 실제 운영은 비용 문제로 단일 AZ 로 진행했고, ElastiCache 역시 이후 Backend EC2 의 **로컬 Redis6(AOF)** 로 대체했습니다 — [주요 도전과 해결 §4](#4-비용-출혈-인지--인프라-다이어트) 참조.
 
 ### 시스템 다이어그램
 
