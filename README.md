@@ -72,7 +72,7 @@ MZ세대의 정치 참여를 게이미피케이션으로 유도한 풀스택 웹
 | 운영 기간         | ~ 2026-05-11                                      |
 | 팀 전체 커밋 수   | 235 (no-merge 기준)                               |
 | **본인 커밋 수**  | **39** (2026-01-28 ~ 2026-03-06, 이후 리팩토링 1회) |
-| **본인 담당**     | **백엔드 초기 구축 · 도메인 모듈 · 초기 CI/CD·TLS** |
+| **본인 담당**     | **백엔드 초기 구축 · 도메인 모듈 · 초기 CI/CD·TLS · AWS 인프라(VPC · public/private subnet · ALB · NAT Gateway · Route 53 · EC2 2대 · RDS · ElastiCache) 설계 및 구축, 초기 배포 파이프라인 구성** |
 | 도메인            | https://www.openpoll.co.kr (종료)                 |
 | 인프라            | AWS (ap-northeast-2)                              |
 | 라이선스          | MIT                                               |
